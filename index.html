@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Village NIRD — LaserGame pédagogique</title>
+<meta name="description" content="Prototype ludique Nuit de l'Info — Village Numérique Résistant. Tire sur les dépendances, découvre des alternatives, gagne des points et sauvegarde ton score. Licence libre." />
+<style>
+:root{
+  --bg: #071026;
+  --glass: rgba(255,255,255,0.03);
+  --accent: #00e6ff;
+  --success: #7fffd4;
+  --danger: #ff6b6b;
+  --panel: rgba(10,18,30,0.85);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Arial;background:
+  radial-gradient(900px 400px at 10% 10%, rgba(0,230,255,0.03), transparent),
+  linear-gradient(180deg,#02040b 0%, var(--bg) 100%); color:#e6f7ff; overflow:hidden}
+.header {
+  position:fixed; top:12px; left:12px; right:12px; z-index:80; display:flex; gap:12px; align-items:center;
+}
+.brand { font-weight:800; font-size:18px; letter-spacing:0.6px; color:var(--accent) }
+.controls { margin-left:auto; display:flex; gap:8px; align-items:center; }
+.button { background:transparent; border:1px solid rgba(255,255,255,0.06); padding:8px 10px; border-radius:8px; color:inherit; cursor:pointer; }
+.panel { background:var(--panel); padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.03); box-shadow:0 8px 30px rgba(0,0,0,0.6); }
+#score { font-weight:700; color:var(--accent) }
+
+.container {
+  position:absolute; inset:80px 12px 12px 12px; overflow:auto; padding:20px; z-index:10;
+  display:grid; grid-template-columns: 1fr 380px; gap:18px;
+}
+
+/* left: content page — these are real "resources" that become shootable */
+.content {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border-radius:12px; padding:18px; min-height:300px;
+}
+.resource {
+  background: rgba(0,0,0,0.15); padding:12px; margin:12px 0; border-radius:10px; position:relative;
+  border:1px solid rgba(255,255,255,0.02);
+  transition: transform .12s ease;
+}
+.resource h3 { margin:0 0 6px 0; font-size:18px; color:#fff }
+.resource p { margin:0; color:rgba(230,247,255,0.9) }
+.resource .hint { display:block; margin-top:8px; font-size:13px; color:rgba(255,255,255,0.75) }
+
+/* right: info, tips, leaderboard */
+.sidebar { background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:12px; padding:12px; min-height:300px; }
+.sidebar h4 { margin:6px 0 8px 0; color:var(--accent) }
+.tip { background:rgba(255,255,255,0.02); padding:8px; border-radius:8px; margin-bottom:8px; font-size:14px }
+.small { font-size:13px; color:rgba(255,255,255,0.7) }
+
+/* cursor */
+.cursor {
+  position:fixed; width:56px; height:56px; z-index:140; pointer-events:none; transform:translate(-50%,-50%);
+  display:flex; align-items:center; justify-content:center;
+}
+.cursor .dot { width:12px; height:12px; border-radius:50%; background:var(--accent); box-shadow:0 0 14px var(--accent) }
+.cursor .bar { position:absolute; height:2px; left:50%; top:50%; transform-origin:left center; background:linear-gradient(90deg,var(--accent), rgba(0,230,255,0.2)); width:0; }
+
+/* hit effect */
+.hit { position:absolute; width:12px; height:12px; border-radius:50%; pointer-events:none; z-index:120; mix-blend-mode:screen; }
+
+/* modal / leaderboard */
+.modal { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:200; min-width:320px; background:linear-gradient(180deg, rgba(10,18,30,0.98), rgba(6,10,16,0.98)); padding:16px; border-radius:12px; border:1px solid rgba(255,255,255,0.03); box-shadow:0 40px 120px rgba(0,0,0,0.6) }
+.hide{ display:none }
+table{ width:100%; border-collapse:collapse; }
+th,td{ padding:8px; font-size:14px; text-align:left }
+th{ color:var(--accent); border-bottom:1px dashed rgba(255,255,255,0.04) }
+
+/* tiny responsive */
+@media(max-width:980px){ .container { grid-template-columns: 1fr } .sidebar{ order:2 } }
+.license { font-size:12px; color:rgba(255,255,255,0.6); margin-top:8px }
+/* === Styles pour le bloc NIRD ajouté dynamiquement === */
+.nird-info {
+    max-width: 850px;
+    margin: 20px auto;
+    padding: 25px;
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 15px;
+    line-height: 1.6;
+    border: 1px solid #334155;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+    animation: fadeIn 0.8s ease both;
+}
+.nird-info h2 {
+    color: #38bdf8;
+    margin-bottom: 15px;
+    font-size: 1.8rem;
+}
+.nird-info p { margin-bottom: 15px; }
+.nird-tip {
+    background: rgba(56,189,248,0.1);
+    border-left: 4px solid #38bdf8;
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 15px;
+    color: #bae6fd;
+    font-size: 1rem;
+}
+@keyframes fadeIn {
+    from { opacity:0; transform:translateY(20px); }
+    to   { opacity:1; transform:translateY(0); }
+}
+
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand panel">Village Numérique Résistant — Nuit de l'Info 2025</div>
+  <div class="panel" id="score">Score: 0</div>
+  <div class="panel small" style="margin-left:8px">HP: <span id="hpText">100</span></div>
+  <div class="controls">
+    <button class="button" id="startBtn">Start (2 min)</button>
+    <button class="button" id="stopBtn">Stop</button>
+    <button class="button" id="boardBtn">Leaderboard</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="content" id="contentArea" aria-live="polite">
+
+    <h2 style="margin:0 0 8px 0">Comment rendre un établissement scolaire plus résistant au contrôle des Big Tech</h2>
+
+    <!-- Each .resource is both content AND a target -->
+    <div class="resource" data-points="30" data-tip="Préconisation: migrer vers un système d'exploitation libre (Linux) sur les postes qui le supportent.">
+      <h3>Systèmes d'exploitation propriétaires (Windows)</h3>
+      <p>Fin du support, mises à jour imposées, dépendance aux versions et licences.</p>
+      <span class="hint">Astuce NIRD: Évaluez les postes compatibles pour migrer progressivement vers GNU/Linux.</span>
+    </div>
+
+    <div class="resource" data-points="25" data-tip="Remplacer services cloud hors-UE par solutions auto-hébergées ou cloud souverain.">
+      <h3>Stockage & Cloud tiers (données hors-UE)</h3>
+      <p>Stockage de données sensibles sur services tiers avec juridiction étrangère.</p>
+      <span class="hint">Astuce NIRD: préférez l'auto-hébergement ou des fournisseurs européens sous RGPD strict.</span>
+    </div>
+
+    <div class="resource" data-points="20" data-tip="Privilégier suites bureautiques open-source et formats ouverts (ODF).">
+      <h3>Suites logicielles payantes et écosystèmes fermés</h3>
+      <p>Documents, licences par poste, formats propriétaires.</p>
+      <span class="hint">Astuce NIRD: formation sur alternatives open-source (LibreOffice, Nextcloud).</span>
+    </div>
+
+    <div class="resource" data-points="18" data-tip="Mettre en place serveur local Nextcloud + formation profs/élèves.">
+      <h3>Services centralisés (mail, drives, outils pédagogiques)</h3>
+      <p>Dépendance aux comptes, abonnements et écosystèmes fermés.</p>
+      <span class="hint">Astuce NIRD: déployer solutions locales et former la communauté.</span>
+    </div>
+
+    <div class="resource" data-points="15" data-tip="Favoriser dispositifs réutilisables, achat responsable, recyclage via filières.">
+      <h3>Obsolescence matérielle</h3>
+      <p>Matériel rendu obsolète malgré fonctionnalité — coûts de renouvellement.</p>
+      <span class="hint">Astuce NIRD: politiques d'achat responsables et réemploi.</span>
+    </div>
+
+    <div class="resource" data-points="12" data-tip="Encourager l'usage d'alternatives décentralisées et formats ouverts pour la communication.">
+      <h3>Réseaux sociaux & écosystème publicitaire</h3>
+      <p>Dépendance aux plateformes centralisées et à la monétisation des données.</p>
+      <span class="hint">Astuce NIRD: tester mastodon, matrix, solutions décentralisées.</span>
+    </div>
+
+    <div style="height:20px"></div>
+    <div class="small">Tire sur chaque élément pour découvrir l'astuce et gagner des points. Après la partie, soumets ton score pour apparaitre sur le tableau.</div>
+    <div class="license">Ressources libres recommandées — production soumise à licence libre (ex: CC-BY-SA ou MIT selon contenus ajoutés).</div>
+  </div>
+
+  <aside class="sidebar">
+    <h4>Principes NIRD</h4>
+    <div class="tip">Inclusif — former l'ensemble de la communauté éducative.</div>
+    <div class="tip">Responsable — choix de solutions respectueuses des données.</div>
+    <div class="tip">Durable — allonger la vie des équipements.</div>
+
+    <h4 style="margin-top:12px">Pendant la partie</h4>
+    <div class="tip small">Chaque ressource touchée ➜ points & astuce affichée.</div>
+    <div class="tip small">Si les systèmes te tirent dessus ➜ perte de HP.</div>
+
+    <h4 style="margin-top:12px">Leaderboard local</h4>
+    <div id="sidebarBoard" class="tip small">Aucun score pour l'instant.</div>
+
+    <div style="margin-top:12px">
+      <button class="button" id="howBtn">Comment ça marche ?</button>
+    </div>
+  </aside>
+</div>
+
+<!-- cursor -->
+<div class="cursor" id="cursor" style="left:-100px;top:-100px">
+  <div class="dot"></div>
+  <div class="bar" id="beam"></div>
+</div>
+
+<!-- modal -->
+<div id="modal" class="modal hide" role="dialog" aria-modal="true">
+  <h3 id="modalTitle">Fin de la partie</h3>
+  <div id="modalBody" style="margin-top:8px"></div>
+  <div style="margin-top:10px; display:flex; gap:8px; align-items:center">
+    <input id="pName" placeholder="Ton pseudo" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit" />
+    <button class="button" id="saveBtn">Sauvegarder</button>
+    <button class="button" id="closeBtn">Fermer</button>
+  </div>
+  <div id="modalBoard" style="margin-top:12px"></div>
+</div>
+
+<script>
+/* ===== Variables ===== */
+const cursor = document.getElementById('cursor');
+const beam = document.getElementById('beam');
+const content = document.getElementById('contentArea');
+const scoreEl = document.getElementById('score');
+const hpText = document.getElementById('hpText');
+const sidebarBoard = document.getElementById('sidebarBoard');
+const modal = document.getElementById('modal');
+const modalBody = document.getElementById('modalBody');
+const modalBoard = document.getElementById('modalBoard');
+
+let mouseX = -100, mouseY = -100;
+let alive = false;
+let score = 0;
+let hp = 100;
+let timeTotal = 120; // 2 minutes
+let timeLeft = timeTotal;
+let timerId = null;
+let spawnId = null;
+const LB_KEY = 'village_nird_lb_v1';
+
+/* Audio simple */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function beep(f=800,d=0.04,v=0.06){
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type='sine'; o.frequency.value=f; g.gain.value=v;
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime + d);
+}
+
+/* Cursor follow */
+window.addEventListener('mousemove', (e)=> {
+  mouseX = e.clientX; mouseY = e.clientY;
+  cursor.style.left = mouseX + 'px';
+  cursor.style.top = mouseY + 'px';
+});
+
+/* mouse press = shot */
+window.addEventListener('mousedown', (e)=>{
+  if (!alive) return;
+  // beam animation
+  beam.style.width = '320px';
+  beam.style.transform = 'translateX(-50%) rotate(' + (Math.random()*6-3) + 'deg)';
+  beep(1200,0.03,0.07);
+  setTimeout(()=> beam.style.width = '0', 90);
+});
+
+/* Make page resources shootable + 'Voir plus' after 5 hits */
+function initResources(){
+  const resources = Array.from(document.querySelectorAll('.resource'));
+  resources.forEach(r=>{
+    r.style.cursor = 'crosshair';
+    r.hitCount = 0; // click counter
+
+    r.addEventListener('click', (ev)=>{
+      if (!alive) return;
+      ev.stopPropagation();
+
+      r.hitCount++; // increment counter
+
+      const pts = parseInt(r.dataset.points) || 10;
+      score += pts; updateScore();
+
+      const rect = r.getBoundingClientRect();
+      flashHit(rect.left + rect.width/2, rect.top + rect.height/2, '+'+pts);
+      showTipModal(r.querySelector('h3')?.textContent || 'Ressource', r.dataset.tip || 'Astuce NIRD', pts);
+      beep(1600,0.04,0.08);
+
+      r.style.transform = 'scale(.93)';
+      setTimeout(()=> r.style.transform = '', 140);
+
+      // after 5 hits, show "Voir plus" button if not already there
+      if(r.hitCount === 5 && !r.querySelector('.voirPlusBtn')){
+        const btn = document.createElement('button');
+        btn.className = 'button voirPlusBtn';
+        btn.textContent = 'Voir plus';
+        btn.style.marginTop = '8px';
+        btn.style.display = 'block';
+        r.appendChild(btn);
+
+btn.addEventListener('click', ()=>{
+  const resources = document.querySelectorAll('.resource');
+
+  if (r === resources[0]) {
+      r.insertAdjacentHTML('beforeend', FIRST_RESOURCE_HTML);
+  } else if (r === resources[1]) {
+      r.insertAdjacentHTML('beforeend', SECOND_RESOURCE_HTML);
+  } else if (r === resources[2]) {
+      r.insertAdjacentHTML('beforeend', THIRD_RESOURCE_HTML);
+  }else if (r === resources[3]) {
+    r.insertAdjacentHTML('beforeend', FOURTH_RESOURCE_HTML);
+   } else if (r === resources[4]) {
+    r.insertAdjacentHTML('beforeend', FIFTH_RESOURCE_HTML);
+   } else if (r === resources[5]) {
+    r.insertAdjacentHTML('beforeend', sixthResourceHTML);
+
+
+
+
+
+
+  } else {
+      // comportement classique pour les autres boutons
+      for(let i=1;i<=3;i++){
+        const block = document.createElement('div');
+        block.className = 'tip';
+        block.textContent = `Bloc supplémentaire ${i} pour "${r.querySelector('h3').textContent}"`;
+        block.style.marginTop = '4px';
+        block.style.background = 'rgba(0,230,255,0.12)';
+        r.appendChild(block);
+      }
+  }
+
+  btn.disabled = true;
+});
+
+
+
+
+      }
+    });
+  });
+}
+
+/* flash effect */
+/* === Bloc HTML complet pour le premier "Voir plus" === */
+const FIRST_RESOURCE_HTML = `
+<div class="nird-info">
+  <h2>⚠️ Les limites des systèmes d’exploitation propriétaires comme Windows</h2>
+
+  <div class="scroll-zone">
+    <img class="scroll-img" src="img/systeme_exploitation.jfif" style="display:block;margin:0 auto;width:400px" alt="">
+  </div>
+
+  <h3>🔹 Fin de support & risques de sécurité</h3>
+  <p>
+      Windows 10 a officiellement atteint sa fin de support le <strong>14 octobre 2025</strong>.
+      Après cette date, Microsoft ne fournit plus de correctifs de sécurité ni de mises à jour.
+  </p>
+  <ul>
+      <li>Vulnérabilités qui s’accumulent.</li>
+      <li>Risques accrus concernant les données.</li>
+      <li>Logiciels incompatibles.</li>
+      <li>Diminution de la conformité RGPD.</li>
+  </ul>
+
+  <h3>🔹 Mises à jour imposées, obsolescence forcée, coûts</h3>
+  <div class="scroll-zone">
+    <img class="scroll-img" src="img/limit_windows.png" style="display:block;margin:0 auto;width:400px" alt="">
+  </div>
+  <p>
+      Windows nécessite du matériel récent → de nombreux PC deviennent artificiellement obsolètes.
+      Les licences et abonnements créent une dépendance financière continue.
+  </p>
+
+  <h2>🌱 Pourquoi migrer vers GNU/Linux</h2>
+
+  <h3>✅ Indépendance & longévité du matériel</h3>
+  <div class="scroll-zone">
+    <img class="scroll-img" src="img/linux_vs_windows.png" style="display:block;margin:0 auto;width:400px" alt="">
+  </div>
+  <p>
+      GNU/Linux fonctionne très bien sur du matériel ancien ou modeste.
+      Cela prolonge la durée de vie des postes de <strong>5 à 10 ans</strong>.
+  </p>
+
+  <h3>✅ Protection des données & souveraineté numérique</h3>
+  <p>
+      Pas de collecte non maîtrisée, pas de backdoor.  
+      Possibilité d’héberger des outils en interne → respect du RGPD.
+  </p>
+
+  <h3>✅ Valeurs pédagogiques du libre</h3>
+  <p>
+      Favorise la compréhension du numérique, l’esprit critique et l’autonomie.
+  </p>
+
+  <h2>📊 Données réelles (2025)</h2>
+  <div class="scroll-zone">
+    <img class="scroll-img" src="img/Poucentage.png" style="display:block;margin:0 auto;width:400px" alt="">
+  </div>
+  <ul>
+      <li><strong>70 %</strong> des PC tournent sous Windows</li>
+      <li><strong>Linux : ~4 %</strong> mais en croissance</li>
+      <li>Windows 10 encore très utilisé malgré la fin de support</li>
+  </ul>
+</div>
+`;
+
+const SECOND_RESOURCE_HTML = `
+<div class="nird-info">
+  <h2>🌍 Stockage hors-UE & Cloud propriétaire</h2>
+
+  <div class="scroll-zone">
+    <img class="scroll-img" src="img/Risking.jpg" style="display:block;margin:0 auto;width:400px" alt="">
+  </div>
+
+  <p>
+      De nombreux services cloud hébergent leurs données hors de l'Union Européenne,
+      notamment aux États-Unis. Ces hébergements ne garantissent pas toujours les
+      protections prévues par le RGPD.
+  </p>
+
+  <p>
+      Cela signifie que les données scolaires — comptes élèves, documents, identifiants,
+      travaux, notes — peuvent être soumises à des lois étrangères telles que le
+      <strong>Cloud Act</strong>, qui autorise l’accès des autorités américaines même
+      lorsque les serveurs sont physiquement situés en Europe.
+  </p>
+
+  <div class="nird-tip">
+      <strong>💡 Astuce NIRD :</strong><br>
+      Préférer des services européens ou, mieux encore, des solutions auto-hébergées
+      dans l’établissement pour garantir la souveraineté numérique et la confidentialité
+      des données.
+  </div>
+</div>
+`;
+const THIRD_RESOURCE_HTML = `
+<div class="nird-info">
+  <h2>🔒 Écosystèmes fermés et coûteux</h2>
+
+  <div class="scroll-zone">
+    <img class="scroll-img" src="img/Eco.png" style="display:block;margin:0 auto;width:400px" alt="">
+  </div>
+
+  <p>
+    De nombreux logiciels et plateformes utilisent des formats propriétaires, ce qui 
+    oblige les établissements scolaires à rester dépendants d'abonnements et de licences 
+    souvent coûteuses.
+  </p>
+
+  <p>
+    Cela limite la flexibilité des enseignants et des élèves, complique l’échange 
+    de documents et rend la migration vers d’autres outils difficile.
+  </p>
+
+  <p>
+    Les formats fermés réduisent la portabilité des données et peuvent créer une 
+    dépendance à long terme vis-à-vis d’un fournisseur unique.
+  </p>
+
+  <div class="nird-tip">
+    <strong>💡 Astuce NIRD :</strong>  
+    Promouvoir les formats ouverts (ODF) et utiliser des solutions libres comme 
+    <strong>LibreOffice</strong> pour favoriser l’indépendance et réduire les coûts.
+  </div>
+</div>
+`;
+const FOURTH_RESOURCE_HTML = `
+<div class="nird-info">
+  <h2>⚙️ Services centralisés</h2>
+
+  <div class="scroll-zone">
+    <img class="scroll-img" src="img/Platform_FERme.jpg" style="display:block;margin:0 auto;width:400px" alt="">
+  </div>
+
+  <p>
+    Les services centralisés regroupent toutes les données et fonctionnalités sur 
+    une seule plateforme ou un seul fournisseur. Cela crée une forte dépendance 
+    aux tiers et limite le contrôle sur les informations de l'établissement.
+  </p>
+
+  <p>
+    En cas de panne, de modification des conditions d'utilisation ou de problème 
+    de sécurité, l'ensemble du fonctionnement scolaire peut être affecté.
+  </p>
+
+  <p>
+    De plus, la centralisation facilite la collecte massive de données, ce qui peut 
+    compromettre la confidentialité des élèves et du personnel.
+  </p>
+
+  <div class="nird-tip">
+    <strong>💡 Astuce NIRD :</strong>  
+    Favoriser les alternatives décentralisées, comme les plateformes auto-hébergées 
+    ou open-source, pour garder le contrôle et protéger les données.
+  </div>
+</div>
+`;
+const FIFTH_RESOURCE_HTML = `
+<div class="nird-info">
+  <h2>💻 Obsolescence matérielle</h2>
+
+  <div class="scroll-zone">
+    <img class="scroll-img" src="img/Plitic.png" style="display:block;margin:0 auto;width:400px" alt="">
+  </div>
+
+  <p>
+    L'obsolescence matérielle désigne le renouvellement forcé du matériel informatique, 
+    même lorsque celui-ci fonctionne encore correctement. Les établissements scolaires 
+    sont souvent poussés à remplacer ordinateurs, tablettes et serveurs pour rester 
+    compatibles avec certains logiciels propriétaires ou services cloud.
+  </p>
+
+  <p>
+    Cela engendre des coûts importants, augmente la production de déchets électroniques 
+    et peut nuire à l'environnement.
+  </p>
+
+  <p>
+    De plus, le matériel récent n'apporte pas toujours de réelles améliorations pour les 
+    usages pédagogiques, ce qui rend ce renouvellement souvent inutile.
+  </p>
+
+  <div class="nird-tip">
+    <strong>💡 Astuce NIRD :</strong>  
+    Mettre en place une politique d’achat durable, privilégier le réemploi et la maintenance 
+    du matériel existant pour prolonger sa durée de vie.
+  </div>
+</div>
+`;
+const sixthResourceHTML = `
+<div class="resource">
+  <h3>Réseaux sociaux dominants</h3>
+  <p>Dépendance à la monétisation des données.</p>
+  <span class="hint">Astuce NIRD : Sensibiliser à Mastodon / Matrix.</span>
+  <div class="nird-info">
+    <h2>📱 Réseaux sociaux dominants</h2>
+    <div class="scroll-zone">
+      <img class="scroll-img" src="img/Social_Media.png" style="display:block;margin:0 auto;width:400px" alt="">
+    </div>
+    <p>
+      Les réseaux sociaux les plus utilisés dans les établissements scolaires sont souvent 
+      centralisés et gratuits, mais leur modèle économique repose sur la monétisation 
+      des données personnelles. Les informations des élèves — profils, interactions, 
+      préférences — peuvent être collectées et exploitées à des fins publicitaires.
+    </p>
+    <p>
+      Cette dépendance crée un risque pour la confidentialité et la souveraineté des données, 
+      tout en encourageant l’usage de plateformes tierces non contrôlées par l’établissement.
+    </p>
+    <div class="nird-tip">
+      <strong>💡 Astuce NIRD :</strong>  
+      Sensibiliser les élèves et le personnel à des alternatives décentralisées et libres, 
+      comme <strong>Mastodon</strong> pour les réseaux sociaux ou <strong>Matrix</strong> 
+      pour la messagerie sécurisée.
+    </div>
+  </div>
+</div>
+`;
+function flashHit(x,y,label){
+  const e = document.createElement('div');
+  e.className = 'hit';
+  e.style.left = (x-6) + 'px'; e.style.top = (y-6) + 'px';
+  e.style.background = 'radial-gradient(circle, rgba(0,230,255,0.95), rgba(0,150,200,0.12))';
+  document.body.appendChild(e);
+  const l = document.createElement('div');
+  l.style.position='fixed'; l.style.left=(x+12)+'px'; l.style.top=(y-8)+'px'; l.style.zIndex=140;
+  l.style.color='var(--accent)'; l.style.fontWeight='700'; l.textContent = label;
+  document.body.appendChild(l);
+  setTimeout(()=>{ e.remove(); l.remove(); }, 700);
+}
+
+/* show tip modal small */
+function showTipModal(title, tip, pts){
+  const popup = document.createElement('div');
+  popup.className='panel';
+  popup.style.position='fixed'; popup.style.left='18px'; popup.style.bottom='18px'; popup.style.zIndex=190;
+  popup.innerHTML = `<strong>+${pts} — ${title}</strong><div style="margin-top:6px">${tip}</div>`;
+  document.body.appendChild(popup);
+  setTimeout(()=> popup.remove(), 3000);
+}
+
+/* enemy system */
+function enemyTick(){
+  if (!alive) return;
+  if (Math.random() < 0.22) {
+    const dmg = Math.floor(Math.random()*10)+4;
+    hp = Math.max(0, hp - dmg);
+    hpText.textContent = hp;
+    const f = document.createElement('div'); f.className='hit';
+    f.style.left = (mouseX-20)+'px'; f.style.top=(mouseY-20)+'px';
+    f.style.width='44px'; f.style.height='44px';
+    f.style.background = 'radial-gradient(circle, rgba(255,80,80,0.95), rgba(255,20,20,0.14))';
+       document.body.appendChild(f);
+    setTimeout(()=> f.remove(), 700);
+  }
+}
+
+/* update score display */
+function updateScore(){
+  scoreEl.textContent = 'Score: ' + score;
+}
+
+/* start game */
+function startGame(){
+  if(alive) return;
+  alive = true;
+  score = 0; hp = 100; timeLeft = timeTotal;
+  updateScore();
+  hpText.textContent = hp;
+
+  // spawn enemy ticks
+  spawnId = setInterval(enemyTick, 1200);
+
+  // game timer
+  timerId = setInterval(()=>{
+    timeLeft--;
+    if(timeLeft <= 0 || hp <=0) endGame();
+  }, 1000);
+}
+
+/* end game */
+function endGame(){
+  alive = false;
+  clearInterval(timerId); clearInterval(spawnId);
+  modalBody.innerHTML = `<p>Ton score final est: <strong>${score}</strong></p>`;
+  modal.classList.remove('hide');
+  showLeaderboard();
+}
+
+/* save score to local storage */
+function saveScore(){
+  const name = document.getElementById('pName').value || 'Anonyme';
+  let lb = JSON.parse(localStorage.getItem(LB_KEY) || '[]');
+  lb.push({name:name,score:score});
+  lb.sort((a,b)=> b.score - a.score);
+  if(lb.length>10) lb = lb.slice(0,10);
+  localStorage.setItem(LB_KEY, JSON.stringify(lb));
+  showLeaderboard();
+}
+
+/* display leaderboard */
+function showLeaderboard(){
+  const lb = JSON.parse(localStorage.getItem(LB_KEY) || '[]');
+  if(lb.length===0){
+    modalBoard.innerHTML = 'Aucun score enregistré.';
+    sidebarBoard.textContent = 'Aucun score pour l\'instant.';
+    return;
+  }
+  let html = '<table><tr><th>#</th><th>Pseudo</th><th>Score</th></tr>';
+  lb.forEach((e,i)=> html += `<tr><td>${i+1}</td><td>${e.name}</td><td>${e.score}</td></tr>`);
+  html += '</table>';
+  modalBoard.innerHTML = html;
+  sidebarBoard.innerHTML = html;
+}
+
+/* stop game manually */
+function stopGame(){
+  alive = false;
+  clearInterval(timerId); clearInterval(spawnId);
+}
+
+/* init */
+initResources();
+
+/* buttons */
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('stopBtn').addEventListener('click', stopGame);
+document.getElementById('saveBtn').addEventListener('click', saveScore);
+document.getElementById('closeBtn').addEventListener('click', ()=> modal.classList.add('hide'));
+document.getElementById('boardBtn').addEventListener('click', showLeaderboard);
+document.getElementById('howBtn').addEventListener('click', ()=>{
+  alert('Clique sur chaque ressource pour découvrir les astuces NIRD et gagner des points. Après 5 clics, tu pourras cliquer sur "Voir plus" pour obtenir des informations supplémentaires.');
+});
+</script>
+</body>
+</html> 
